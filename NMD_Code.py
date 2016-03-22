@@ -8,14 +8,21 @@ This code is written for the course Numerical Methods for Dynamics given at the 
 The code solves, as an example, the Eigenvalues and Eigenmodes of a simple triangular structure 
 consisting of beam elements, the Bar element is to be added by the students.
 
+Contributers:
+Arts, Sebastian
+Gadi, Ratnakar
+van Schoubroeck, Jimmy
+Verboom, Jeroen
+
+For people seeking an introduction to Python, have a look at the codeacademy.com or learnpythonthehardway.org/book/
+
 The following steps are carried out by the code:
 1. Call geometric classes (Square, Circle) to create elements.
 2. Call Material class to create material.
 3. Call Node/Element class to create elements.
 4. Call Mesh class to create global stiffness and mass matrix.
-5. Call GlobalMatrix class to remove fixed nodes.
-6. Call EigenSolution class to solve for Eigenvalues/modes.
-7. Call Plot class to create a plot from your structure
+5. Call EigenSolution class to solve for Eigenvalues/modes.
+6. Call Plot class to create a plot of your structure
  '''
 
 import numpy as np
@@ -61,18 +68,12 @@ class Node:
 ############################## Assigning Material
 
 class Material:
-    '''Generate a material with two inputs E and Rho'''   
-    def __init__(self,E,Rho,nu):
+    '''Generate a material with inputs E, Rho and nu'''   
+    def __init__(self, E, Rho, nu):
         self.E = E
         self.Rho = Rho
         self.nu = nu
         self.G = E / (2 * (1 + nu ))
-    def getE(self):
-        return self.E
-    def getRho(self):
-        return self.Rho 
-    def getG(self):
-        return self.G
 
 
 ############################## Beam Class 
@@ -81,7 +82,7 @@ class Material:
 class Beam:
     """This class constructs the mass and stiffness matrix for beam elements"""
 
-    def __init__(self, material, nodes, profile, r2):
+    def __init__(self, material=None, nodes=np.zeros((3, 3)), profile=None, r2=0):
         self.E = material.E
         self.Rho = material.Rho
         self.G = material.G
@@ -160,7 +161,7 @@ class Element:
     def __init__(self, number_of_elements=1):
         """Creation of n by 3 matrix with n nodes and 3 coordinates"""
         self.lists = []
-        self.matrix = [self.lists.append([]) for x in (range(number_of_elements))]
+        self.matrix = [self.lists.append([]) for x in (range(number_of_elements))] # In this property n lists are made according to the number of nodes to be added
 
 
 ############################## Mesh Class 
@@ -170,14 +171,16 @@ class Mesh:
     """Mesh class contains the type of elements (beam/bar), the material and the nodes.
     Furthermore the class has the ability to assemble the stiffness and mass matrix"""
 
-    def __init__(self, nodes, elements):
-        self.nodes = nodes
+    def __init__(self, elements):
         self.Elements = elements
+        self.lists = []
+        self.connectivity = [self.lists.append([]) for x in (range(len(self.Elements.matrix)))]
+        self.number_of_elements = len(self.Elements.matrix)
     
-    def assemble_KM(self):
+    def assemble_KM(self, dofFix, fixedNodes):
         """Returns the assembled K and M matrix"""
-        temp_node_matrix = np.zeros((len(self.Elements.matrix), 3), dtype = int)
-        for i in range(len(self.Elements.matrix)):
+        temp_node_matrix = np.zeros((self.number_of_elements, 3), dtype = int)
+        for i in range(self.number_of_elements):
             temp_node_matrix[i, :] = self.Elements.matrix[i][3][:] 
         
         activeNodes = np.unique(temp_node_matrix[:, [0, 1]]) #Selecting the used nodes
@@ -185,13 +188,11 @@ class Mesh:
         print("The amount of degrees of freedom are,", nDof)
         locnod = np.zeros((len(activeNodes), 6))
         locnod[activeNodes] = np.arange(0, len(activeNodes) * 6).reshape(3,-1)
-        Nele = len(Elements.matrix)
         
         k = sparse.lil_matrix((nDof,nDof))
         m = sparse.lil_matrix((nDof,nDof))
         
-        
-        for i in range(Nele):
+        for i in range(self.number_of_elements):
             # Specifying the specific element characteristics
             elementType = np.array((self.Elements.matrix[i][0]), dtype = int)
             elementMaterial = self.Elements.matrix[i][1]
@@ -221,26 +222,9 @@ class Mesh:
             
             # Clean up temporary values
             beamTemp = elementType = elementProfile = kElement = mElement = dof = None
-            
-        return k, m, nDof, locnod
-
-
-############################## Global Matrix 
-############################## Assemble Global Matrices 
-
-class GlobalMatrix:
-    '''Using the assembled matrix and removing boundary condition row/cols'''
-    def __init__(self,locnod,k,m,nDof):
-        '''Requested variables: locnod,k,m,nDof '''
-        self.localnodes = locnod
+        
         self.kGlobal = k
         self.mGlobal = m
-        self.nDof = nDof
-        
-    def dofRem(self):
-        '''Removing the fixed degrees of freedom from the K and M matrix'''
-        dofFix = []
-        fixedNodes = [0]
     
         for n in fixedNodes:
             dofFix.append(locnod[n])
@@ -250,15 +234,26 @@ class GlobalMatrix:
         nDofFix = len(dofFix)
 
         # Removing fixed dof from the total list of dof
-        dofRem = list(set(range(1,self.nDof)) - set(dofFix))
-        nDofRem = self.nDof - nDofFix
+        dofRem = list(set(range(1,nDof)) - set(dofFix))
+        nDofRem = nDof - nDofFix
  
-        # Storing only the remaining dof values of K and M
-        k = self.kGlobal[np.ix_(dofRem, dofRem)]
-        m = self.mGlobal[np.ix_(dofRem, dofRem)]
-        return k,m
-
-
+        # Returning only the remaining dof values of K and M
+        return self.kGlobal[np.ix_(dofRem, dofRem)], self.mGlobal[np.ix_(dofRem, dofRem)]
+    
+    def calc_connectivity(self):
+        """Function returns list of elements with which the element is sharing a node.
+        The index of the list indicate the element, the first list in this list is the first node, the second the second."""
+        for n in range(0, self.number_of_elements):
+            temp_1 = []
+            temp_2 = []
+            for m in range(0, self.number_of_elements):
+                if self.Elements.matrix[n][3][0] == self.Elements.matrix[m][3][0] or self.Elements.matrix[n][3][0] == self.Elements.matrix[m][3][1]:
+                    temp_1.append(m)
+                if self.Elements.matrix[n][3][1] == self.Elements.matrix[m][3][0] or self.Elements.matrix[n][3][1] == self.Elements.matrix[m][3][1]:
+                    temp_2.append(m)
+            self.connectivity[n] = [temp_1, temp_2]
+                
+        return self.connectivity
 
 ############################## Eigensolver Class 
 ############################## Solve for eigenvalues/Modes 
@@ -266,7 +261,7 @@ class GlobalMatrix:
 class EigenSolution:
     '''Solve Eigenvalues and Vectors for global stiffness K and mass M matrix'''
     def __init__(self,k,m):
-        '''Requested variables: k,m '''
+        '''Requested variables: k, m '''
         self.k = k.todense()
         self.m = m.todense()
     
@@ -323,6 +318,10 @@ class MeshPlot:
         plt.show()
 
 
+
+
+# In[ ]:
+
 ############################## Example how to set up a new structure
 
 ## Create instance of material
@@ -345,14 +344,18 @@ Elements.matrix[0] = [2, Steel, profile_1, [0, 1, 6]]
 Elements.matrix[1] = [2, Steel, profile_1, [1, 2, 6]]
 Elements.matrix[2] = [2, Steel, profile_1, [0, 2, 6]]
  
+## Set the fixed DOF and nodes
+fixedNodes = [0]
+fixedDof = []    
+
 ## Create instance of global stifness/mass matrix, internally calling beam elements  
 KM_assy = Mesh(Elements)
-k, m, nDof,locnod = KM_assy.assemble_KM()
+k, m = KM_assy.assemble_KM(fixedDof, fixedNodes)
 #print(k)
 
-## Reduce KM Matrix 
-FinalAs = GlobalMatrix(locnod,k,m,nDof)
-k, m = FinalAs.dofRem()
+## The connectivity of the elements can be checked
+# print("Connectivity: ", KM_assy.calc_connectivity())
+
 #print("The size of K = ", len(K), "x", len(K))
 print("kGlobal = ", k)
 print("mGlobal = ", m)
@@ -363,16 +366,7 @@ x, omega2 = Eig.eig()
 print("Eigenvectors = ", x)
 print("Eigenvalues = ", omega2)
 
-## Plot the structure
+# ## Plot the structure
 plot = MeshPlot(Nodes,Elements)
 testplot = plot.Plot()
-
-
-
-
-
-
-# In[ ]:
-
-
 
