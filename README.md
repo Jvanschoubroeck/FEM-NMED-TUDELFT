@@ -1,2 +1,3 @@
 # FEM-NMED-TUDELFT
-Code for the Numerical Methods for Engineering Dynamics course at the 3mE faculty of the TU Delft.
+This repository contains code for the Numerical Methods in Engineering Dynamics course as given at the 3mE faculty at the TU Delft in the Netherlands.
+
