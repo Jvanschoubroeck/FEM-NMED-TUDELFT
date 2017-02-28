@@ -1,8 +1,3 @@
-
-# coding: utf-8
-
-# In[ ]:
-
 '''
 This code is written for the course Numerical Methods for Dynamics given at the TU Delft.
 The code solves, as an example, the Eigenvalues and Eigenmodes of a simple triangular structure 
@@ -279,8 +274,6 @@ class EigenSolution:
         x = np.real(x[:,k])
         return x, omega2
 
-
-
 #################### Plot Final Mesh  ################################################
 ######################################################################################
 
@@ -316,12 +309,7 @@ class MeshPlot:
        
         ax.plot(x,y,z,'r')        
         plt.show()
-
-
-
-
-# In[ ]:
-
+        
 ############################## Example how to set up a new structure
 
 ## Create instance of material
@@ -369,4 +357,3 @@ print("Eigenvalues = ", omega2)
 # ## Plot the structure
 plot = MeshPlot(Nodes,Elements)
 testplot = plot.Plot()
-
